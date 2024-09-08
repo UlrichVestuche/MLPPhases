@@ -1,19 +1,17 @@
 
-
-
-import matplotlib.pyplot as plt
 import numpy as np
-from tensorflow.keras import layers, models
+
 
 # Convert spin states to angles
-angles = np.linspace(0, 2*np.pi, 6, endpoint=False)
+angles = np.linspace(0, 2* np.pi, 6, endpoint=False)
+
 
 def wolff_algorithm_clock(L, T, num_steps):
     # Initialize spins (LxL lattice) with random angles
     spins = np.random.choice(angles, size=(L, L))
 
     def delta_energy(i, j, new_spin):
-        neighbors = spins[(i+1) % L, j] + spins[i, (j+1) % L] + spins[(i-1) % L, j] + spins[i, (j-1) % L]
+        neighbors = spins[(i + 1) % L, j] + spins[i, (j + 1) % L] + spins[(i - 1) % L, j] + spins[i, (j - 1) % L]
         current_energy = -np.cos(spins[i, j] - neighbors)
         new_energy = -np.cos(new_spin - neighbors)
         return new_energy - current_energy
@@ -29,7 +27,7 @@ def wolff_algorithm_clock(L, T, num_steps):
         # Growing the cluster
         while cluster:
             x, y = cluster.pop()
-            for nx, ny in [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]:
+            for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
                 nx %= L
                 ny %= L
                 if spins[nx, ny] == spin_cluster and np.random.rand() < 1 - np.exp(-delta_energy(nx, ny, new_spin) / T):
@@ -37,13 +35,30 @@ def wolff_algorithm_clock(L, T, num_steps):
                     cluster.append((nx, ny))
 
     return spins
-# Generate the artificial training data
+
+
+import numpy as np
+
 def generate_training_data(num_samples=200, num_sites=200):
-    config_1 = np.ones((num_samples//2, num_sites))
-    config_2 = np.zeros((num_samples//2, num_sites))
+    # Create a matrix of ones and zeros as before
+    config_1 = np.ones((num_samples // 2, num_sites))  # Ones
+    config_2 = np.zeros((num_samples // 2, num_sites))  # Zeros
+
+    # Stack them into one matrix
     X_train = np.vstack((config_1, config_2))
-    y_train = np.array([[1, 0]] * (num_samples//2) + [[0, 1]] * (num_samples//2))
-    return X_train, y_train
+
+    # One-hot encode the matrix: [1, 0] for ones and [0, 1] for zeros
+    one_hot_encoded_X_train = np.array([[[1, 0] if val == 1 else [0, 1] for val in row] for row in X_train])
+
+    # Flatten each sample by reshaping from (num_sites, 2) to (num_sites * 2)
+    flattened_X_train = one_hot_encoded_X_train.reshape(num_samples, num_sites * 2)
+
+    # Generate one-hot encoded y_train: [1, 0] for ones and [0, 1] for zeros
+    y_train = np.array([[1, 0]] * (num_samples // 2) + [[0, 1]] * (num_samples // 2))
+
+    return flattened_X_train, y_train
+
+
 def preprocess_data_clock(configurations):
     processed_data = []
     for config in configurations:
@@ -51,54 +66,92 @@ def preprocess_data_clock(configurations):
         flattened = config.flatten()
         indices = np.random.choice(flattened.size, 200, replace=False)
         selected_angles = flattened[indices]
-        # Normalize angles to a range suitable for NN input
-        #processed_data.append(np.cos(selected_angles) + np.sin(selected_angles))
-        # Compute theta mod pi for each selected angle
-        processed_data.append(selected_angles/np.pi)
+
+        # Generate both cos and sin for each selected angle and flatten them
+        cos_sin_data = np.column_stack((np.cos(selected_angles), np.sin(selected_angles)))
+        processed_data.append(cos_sin_data.flatten())
+
     return np.array(processed_data)
 
-# Generate the training data
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+# PyTorch model
+class SimpleNN(nn.Module):
+    def __init__(self):
+        super(SimpleNN, self).__init__()
+        self.fc1 = nn.Linear(400, 2)
+        self.fc2 = nn.Linear(2, 2)
+        self.relu = nn.ReLU()
+        self.softmax = nn.Softmax(dim=1)
+        self.l2_reg = 0.01
+
+    def forward(self, x):
+        out = self.fc1(x)
+        out = self.relu(out)
+        out = self.fc2(out)
+        return self.softmax(out)
+
+
+# L2 Regularization
+def l2_regularization(model, lambda_val=0.01):
+    l2_loss = 0.0
+    for param in model.parameters():
+        l2_loss += torch.sum(param.pow(2))
+    return lambda_val * l2_loss
+
+
+# Convert data to PyTorch tensors
 X_train, y_train = generate_training_data()
+X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
+y_train_tensor = torch.tensor(y_train, dtype=torch.float32)
 
+# Initialize model, loss function, and optimizer
+model = SimpleNN()
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-from tensorflow.keras import regularizers
+# Training loop
+epochs = 100
+batch_size = 40
 
-# Define the model with L2 regularization
-model = models.Sequential([
-    layers.Dense(2, input_shape=(200,), activation='relu',
-                 kernel_regularizer=regularizers.l2(0.01)),  # L2 regularization added here
-    layers.Dense(2, activation='softmax',
-                 kernel_regularizer=regularizers.l2(0.01))  # L2 regularization added here
-])
+for epoch in range(epochs):
+    optimizer.zero_grad()
 
-# Compile the model
-model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    # Forward pass
+    outputs = model(X_train_tensor)
 
-# Train the model
-model.fit(X_train, y_train, epochs=100, batch_size=40, verbose=1)
+    # Compute the loss
+    loss = criterion(outputs, torch.max(y_train_tensor, 1)[1])
+    l2_loss = l2_regularization(model, lambda_val=0.01)
+    total_loss = loss + l2_loss
 
-# Evaluate the model
-loss, accuracy = model.evaluate(X_train, y_train)
-print(f"Training Loss: {loss:.4f}")
-print(f"Training Accuracy: {accuracy:.4f}")
+    # Backward pass and optimization
+    total_loss.backward()
+    optimizer.step()
 
+    if (epoch + 1) % 10 == 0:
+        print(f'Epoch [{epoch + 1}/{epochs}], Loss: {total_loss.item():.4f}')
 
-
-# Generate configurations at different temperatures
+# Generate configurations and test the model
 L = 32
-temperatures = [0.1 + 0.5*i for i in range(1, 200)]
+temperatures = [0.1 + 0.005 * i for i in range(1, 200)]
 num_steps = 1000
 
-configurations = [wolff_algorithm_clock(L, T, num_steps) for T in temperatures]
-X_test = preprocess_data_clock(configurations)
 
-# Predict the output for the generated configurations
-predictions = model.predict(X_test)
-magnitudes = np.linalg.norm(predictions, axis=1)
+# Generate data
+configurations = [wolff_algorithm_clock(L,T,num_steps=num_steps) for T in temperatures]
+X_test = torch.tensor(preprocess_data_clock(configurations), dtype=torch.float32)
 
-# Display predictions for each temperature
-for i, T in enumerate(temperatures):
-    print(f"Temperature {T}: NN Output {predictions[i]}")
+# Predict
+with torch.no_grad():
+    predictions = model(X_test)
+    magnitudes = torch.norm(predictions, dim=1).numpy()
 
 # Plotting the magnitude R versus temperature
 plt.plot(temperatures, magnitudes, marker='o')
