@@ -37,7 +37,6 @@ def wolff_algorithm_clock(L, T, num_steps):
     return spins
 
 
-import numpy as np
 
 def generate_training_data(num_samples=200, num_sites=200):
     # Create a matrix of ones and zeros as before
@@ -67,9 +66,11 @@ def preprocess_data_clock(configurations):
         indices = np.random.choice(flattened.size, 200, replace=False)
         selected_angles = flattened[indices]
 
-        # Generate both cos and sin for each selected angle and flatten them
-        cos_sin_data = np.column_stack((np.cos(selected_angles), np.sin(selected_angles)))
-        processed_data.append(cos_sin_data.flatten())
+        # Apply condition based on angle
+        binary_encoding = np.array([[0, 1] if angle <= np.pi else [1, 0] for angle in selected_angles])
+
+        # Flatten the binary encoded data
+        processed_data.append(binary_encoding.flatten())
 
     return np.array(processed_data)
 
@@ -99,7 +100,7 @@ class SimpleNN(nn.Module):
 
 
 # L2 Regularization
-def l2_regularization(model, lambda_val=0.01):
+def l2_regularization(model, lambda_val=0.001):
     l2_loss = 0.0
     for param in model.parameters():
         l2_loss += torch.sum(param.pow(2))
@@ -114,11 +115,15 @@ y_train_tensor = torch.tensor(y_train, dtype=torch.float32)
 # Initialize model, loss function, and optimizer
 model = SimpleNN()
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.Adam(model.parameters(), lr=0.05)
+
+
+# Initialize arrays to store loss and accuracy
+train_loss_history = []
 
 # Training loop
 epochs = 100
-batch_size = 40
+batch_size = 20
 
 for epoch in range(epochs):
     optimizer.zero_grad()
@@ -135,26 +140,55 @@ for epoch in range(epochs):
     total_loss.backward()
     optimizer.step()
 
+    # Store the loss for plotting
+    train_loss_history.append(total_loss.item())
+
     if (epoch + 1) % 10 == 0:
         print(f'Epoch [{epoch + 1}/{epochs}], Loss: {total_loss.item():.4f}')
 
+# Plot learning curves
+plt.plot(range(1, epochs + 1), train_loss_history, label='Training Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.title('Learning Curve: Loss vs Epochs')
+plt.legend()
+plt.show()
+
 # Generate configurations and test the model
-L = 32
-temperatures = [0.1 + 0.005 * i for i in range(1, 200)]
-num_steps = 1000
+L = 50
+temperatures = [0.5 + 0.01 * i for i in range(1, 200)]
+num_steps = 4000
+
+
 
 
 # Generate data
 configurations = [wolff_algorithm_clock(L,T,num_steps=num_steps) for T in temperatures]
 X_test = torch.tensor(preprocess_data_clock(configurations), dtype=torch.float32)
 
+# Select 5 random configurations with their temperatures
+# random_indices = np.random.choice(len(configurations), 5, replace=False)
+random_indices = [i for i in range(1,len(temperatures),20)]
+# Display the configurations with their temperatures
+for idx in random_indices:
+    config = configurations[idx]
+    temp = temperatures[idx]
+
+    plt.figure()
+    plt.imshow(config, cmap='hsv')  # Displaying the configuration as an image
+    plt.title(f"Temperature: {temp:.2f}")
+    plt.colorbar(label="Spin State")
+    plt.show()
+
 # Predict
 with torch.no_grad():
     predictions = model(X_test)
     magnitudes = torch.norm(predictions, dim=1).numpy()
-
+# Display predictions for each temperature
+for i, T in enumerate(temperatures):
+    print(f"Temperature {T}: NN Output {predictions[i]}")
 # Plotting the magnitude R versus temperature
-plt.plot(temperatures, magnitudes, marker='o')
+plt.plot(temperatures, magnitudes, marker='o', linestyle='none')
 plt.xlabel('Temperature')
 plt.ylabel('Magnitude R of NN Output')
 plt.title('Magnitude R vs Temperature for 6-State Clock Model')
