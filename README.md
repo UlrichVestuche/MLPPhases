@@ -5,7 +5,10 @@ Studying phase of q-state clock model with MLP:
 The training data is unusual and knows nothing about the actual model. We feed two 200 copies of two vectors with a collinear 1d array of vectors, i.e. [11111111...] and [000000...] with
 the one-hot encoding defined as [0] -> [1 0] and [1] -> [0 1].
 
-The first layer is a 400 node, and there are also two hidden layers, one with ReLu and the other with SoftMax activation.
+The first layer is a 400-node layer, and there are also two hidden layers, one with ReLu and the other with SoftMax activation.
+
+The model gives predictions for the Wollf algorithm simulated for L number of sites. 
+
 
 
 
