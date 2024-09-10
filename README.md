@@ -14,5 +14,7 @@ The model gives predictions for the Wollf algorithm simulated for L number of si
 
 Prediction from the linear classifier based on number of 1 and 0 in the string:
 ![Figure_1](https://github.com/user-attachments/assets/5451e407-7a00-44ed-bab9-67702392510f)
+
 Prediction of the MLP model:
+
 ![Figure_2](https://github.com/user-attachments/assets/b2171307-0a1c-4f6a-bcce-8cb159cf18ff)
