@@ -1,6 +1,11 @@
-Studying phase of q-state clock model with MLP:
+Studying phases of q-state clock model with MLP:
 
 ![image](https://github.com/user-attachments/assets/316d79eb-4c9d-47f0-95c9-b4528d0e2c1e)
+
+
+The 2-state Potts model is also known as Ising model has a well-defined phase transition (Kramers-Wannier dual point).
+
+The 6-state Potts model ...
 
 The training data is unusual and knows nothing about the actual model. We feed two 200 copies of two vectors with a collinear 1d array of vectors, i.e. [11111111...] and [000000...] with
 the one-hot encoding defined as [0] -> [1 0] and [1] -> [0 1].
@@ -18,3 +23,8 @@ Prediction from the linear classifier based on number of 1 and 0 in the string:
 Prediction of the MLP model:
 
 ![Figure_2](https://github.com/user-attachments/assets/b2171307-0a1c-4f6a-bcce-8cb159cf18ff)
+
+
+Compare these predictions with unsupervised learning PCA + k-clustering.
+
+[paper](https://arxiv.org/abs/2112.06735)
