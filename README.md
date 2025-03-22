@@ -22,7 +22,7 @@ Prediction from the linear classifier based on number of 1 and 0 in the string:
 
 Prediction of the MLP model:
 
-![Figure_2](https://github.com/user-attachments/assets/b2171307-0a1c-4f6a-bcce-8cb159cf18ff)
+![MagTem100draws](https://github.com/user-attachments/assets/2e18e745-55ad-43a6-95a6-c37fae753788)
 
 
 Compare these predictions with unsupervised learning PCA + k-clustering.
