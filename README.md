@@ -32,7 +32,8 @@ This repository demonstrates how a simple multilayer perceptron (MLP) can learn 
 - **Input layer**: 400 nodes (flattened one-hot vectors).
 - **Hidden layer 1**:  ReLU activation, 400 neurons.  
 - **Hidden layer 2**: Softmax activation over two output classes (“ordered” vs. “disordered”).
-- **Training objective**: Cross-entropy loss with stochastic gradient descent (SGD).
+- **Loss**: Cross-entropy (PyTorch’s CrossEntropyLoss), plus an explicit L2 penalty on all weights.
+- **Optimizer**: Adam (learning rate = 0.05).
 
 Despite its simplicity, this MLP learns to distinguish phases by picking up subtle statistical differences in the flattened strings, effectively learning to approximate the order parameter.
 
