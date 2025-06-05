@@ -1,70 +1,102 @@
 Studying Phases of the q-State Clock Model with an MLP
 ---
 
-This repository demonstrates how a simple multilayer perceptron (MLP) can learn phase transitions in Potts- and clock-type spin models, using only minimally informed input data.
+This repository demonstrates how a simple multilayer perceptron (MLP) can learn phase transitions in Potts- and clock-type spin models, using only minimally informed input data derived from raw spin configurations.
 
 ## Overview
 
 - **Models considered**  
   - **2-state Potts model (Ising)**: Exhibits a well-known phase transition at the Kramers–Wannier dual point.  
-  - **6-state Potts model**: A richer spin space with a more complex phase structure.
+  - **6-state clock model**: A richer spin space with a more complex phase structure.
 
 - **Key idea**  
-  Instead of providing explicit spin configurations or Hamiltonian details, we feed the MLP only “flat” vectors consisting of all 1’s or all 0’s (of length 200) with a simple one-hot encoding:  
-  ```
-  [0] → [1 0]  
-  [1] → [0 1]
-  ```
-  In other words, the network sees only uniform binary strings labeled by whether they came from a “high‐temperature” (disordered) or “low‐temperature” (ordered) ensemble, without direct knowledge of the underlying physics.
+  We generate spin configurations at various temperatures using the Wolff cluster algorithm. Instead of providing the MLP with full lattice configurations or explicit Hamiltonian information, we sample 200 sites from each configuration, threshold their spin values to binary (0 or 1), and then one-hot encode those binaries to form a fixed-length input vector of length 400. The network thus sees only these one-hot–encoded binary strings labeled “ordered” or “disordered,” learning to distinguish phases from statistical patterns in those 200-site samples.
 
 ## Data Preparation
 
 1. **Simulation**  
-   - We generate spin configurations using the Wolff algorithm on an L × L lattice (with L chosen per experiment).  
-   - Each configuration is reduced to two 1D vectors of length 200 by counting the number of up (1) and down (0) spins at each step; these counts are then thresholded into binary strings.
+   - Use the Wolff algorithm to generate spin configurations on an L×L lattice for each temperature (T) and q-state (q).  
+   - Each L×L configuration is flattened to a 1D array of length L².  
+   - Randomly select 200 sites from the flattened array.  
+   - For each selected site:  
+     - In the Potts/clock case, treat the spin value (an integer from 0 to q−1) as an “angle” placeholder.  
+     - Threshold: if spin < q/2 − 0.01, assign 0; otherwise assign 1.
 
 2. **One-Hot Encoding**  
-   - Each bit 0 in the string is mapped to `[1 0]`, and each bit 1 to `[0 1]`.  
-   - Concatenating two length-200 one-hot vectors produces a 400-component input for the MLP.
+   - Map each binary bit (0 or 1) in the 200-site sample to a two-element one-hot vector:  
+     ```
+     0 → [1, 0]
+     1 → [0, 1]
+     ```  
+   - Concatenate all 200 one-hot pairs into a single 400-component input vector.  
+   - Repeat for each configuration to build the dataset.
+
+3. **Labels**  
+   - Label each 400-component input according to its temperature: “ordered” (low T) or “disordered” (high T), based on a chosen critical temperature.
 
 ## Network Architecture
 
-- **Input layer**: 400 nodes (flattened one-hot vectors).
-- **Hidden layer 1**:  ReLU activation, 400 neurons.  
-- **Hidden layer 2**: Softmax activation over two output classes (“ordered” vs. “disordered”).
-- **Loss**: Cross-entropy (PyTorch’s CrossEntropyLoss), plus an explicit L2 penalty on all weights.
-- **Optimizer**: Adam (learning rate = 0.05).
+- **Input layer**: 400 nodes (flattened one-hot vectors).  
+- **First hidden layer**: 2 neurons, ReLU activation (i.e., `nn.Linear(400, 2)` followed by `ReLU`).  
+- **Output layer**: 2 neurons (logits for “ordered” vs. “disordered”), corresponding to `nn.Linear(2, 2)`.  
+  - Softmax is applied externally when computing probabilities (e.g., with `F.softmax` before interpretation).  
+- **Loss**: `CrossEntropyLoss` (which combines `LogSoftmax` + NLL) plus an explicit L₂ penalty on all weights via a custom regularization term.  
+- **Optimizer**: Adam (`lr=0.05`).
 
-Despite its simplicity, this MLP learns to distinguish phases by picking up subtle statistical differences in the flattened strings, effectively learning to approximate the order parameter.
+Despite its simplicity (only two hidden neurons), this MLP can learn subtle statistical differences in the flattened binary samples, effectively capturing an order-parameter–like signal.
+
+## Training Details
+
+- **Dataset**:  
+  - Generate 200 total configurations (100 labeled “ordered,” 100 labeled “disordered”), then randomly shuffle.  
+  - One-hot encode each 200-site sample to form a 400-dimensional input.  
+  - Convert labels to integer class indices (0 or 1) for cross-entropy.
+
+- **Hyperparameters**:  
+  - Batch size = 40  
+  - Epochs = 300  
+  - L₂ regularization coefficient (lambda) = 0.005  
+  - Learning rate = 0.05
+
+- **Monitoring**:  
+  - Track total loss (cross-entropy + L₂ penalty) each epoch.  
+  - Optionally visualize first-layer weights every 10 epochs using a heatmap.
+
+## Baseline: Linear Classifier
+
+As a simple baseline, we also compute a “linear” decision metric from each 200-site sample:  
+- For each binary sample (0/1 values at 200 sites), compute the fraction of 0’s vs. 1’s.  
+- Define a linear classifier that assigns a phase based on which fraction is larger.  
+- Compute the average magnitude:  
+  \[
+    R = \sqrt{\left(rac{\#\,	ext{zeros}}{200}
+ight)^2 + \left(rac{\#\,	ext{ones}}{200}
+ight)^2}
+  \]  
+- Plot \(R\) vs. temperature to see how a magnetization‐based thresholding performs relative to the MLP.
 
 ## Results
 
-### Linear Classifier Baseline
+### Linear Classifier Predictions
 
-As a baseline, we trained a linear classifier that uses only the counts of 1’s and 0’s (i.e., total magnetization) to predict phase labels. Below is an example of its accuracy across temperatures:
+Below is an example of how the linear classifier’s average magnitude \(R\) varies with temperature:
 
 ![Linear Classifier Predictions](https://github.com/user-attachments/assets/5451e407-7a00-44ed-bab9-67702392510f)
 
-*Figure 1: Predictions from a linear classifier based solely on the total number of 1’s and 0’s in each input string.*
+*Figure: Linear classifier’s \(R\) vs. temperature for the 6-state clock model.*
 
-### MLP Performance
+### MLP Predictions
 
-The MLP, in contrast, incorporates higher-order correlations implicit in the one-hot vectors. Its predictions align much more sharply with known critical temperatures:
+The MLP’s output probabilities for the “ordered” phase (after applying softmax to the logits) produce a sharper transition near the known critical temperature. For each temperature, we record the average softmax probability norm and plot it with error bars:
 
 ![MLP Model Predictions](https://github.com/user-attachments/assets/2e18e745-55ad-43a6-95a6-c37fae753788)
 
-*Figure 2: MLP predictions (probability of “ordered” phase) as a function of temperature for L sites. The curve becomes steeper near the true critical point.*
+*Figure: MLP’s average probability norm for “ordered” vs. temperature, with error bars over multiple samples.*
 
-It is evident that the MLP outperforms the simple linear baseline, successfully capturing the phase transition despite never being given explicit information about the Hamiltonian or spin interactions.
-
-## Comparison with Unsupervised Methods
-
-For reference, prior work has applied PCA followed by k-means clustering to identify phases in similar spin models. While PCA + k-means can separate low- and high-temperature regimes to some extent, it typically requires handcrafted feature extraction (e.g., block‐averaged magnetization) and does not offer the same predictive accuracy or generalization as the supervised MLP approach.
-
+In practice, the MLP prediction curve is significantly steeper near \(T_c\), demonstrating that it can reliably detect the phase transition with only minimally processed input.
 
 
 ## References
 
 - Philipp Höller, Andreas Kräh, Johannes Imriška, **“Learning Phase Transitions in Spin Systems with Neural Networks”**, _arXiv:2112.06735_, 2021.  
   https://arxiv.org/abs/2112.06735
-
